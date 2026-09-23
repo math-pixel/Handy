@@ -89,9 +89,13 @@ pub fn cancel_current_operation(app: &AppHandle) {
     // Unregister the cancel shortcut asynchronously
     shortcut::unregister_cancel_shortcut(app);
 
-    // Cancel any ongoing recording
+    // Cancel any ongoing recording (stop streaming transcriber first)
     let audio_manager = app.state::<Arc<AudioRecordingManager>>();
     let recording_was_active = audio_manager.is_recording();
+    audio_manager.clear_chunk_callback();
+    audio_manager.invoke_streaming_stop();
+    // Bump the generation so any in-flight partial-paste main-thread closures self-abort.
+    audio_manager.partial_paste_state.advance_and_read();
     audio_manager.cancel_recording();
 
     // Abandon any live streaming transcription

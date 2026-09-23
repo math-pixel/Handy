@@ -4,6 +4,7 @@
   "version": "0.9.7",
   "type": "module",
   "scripts": {
+    "predev": "bun run scripts/kill-dev-ports.ts",
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",

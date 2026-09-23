@@ -6,6 +6,7 @@ use crate::managers::{
 use std::sync::Arc;
 use tauri::{AppHandle, State};
 
+
 #[tauri::command]
 #[specta::specta]
 pub async fn get_history_entries(
@@ -105,6 +106,7 @@ pub async fn retry_history_entry_transcription(
         .map(|_| ())
         .map_err(|e| e.to_string())
 }
+
 
 #[tauri::command]
 #[specta::specta]

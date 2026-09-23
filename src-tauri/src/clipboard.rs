@@ -771,6 +771,124 @@ fn should_send_auto_submit(auto_submit: bool, paste_method: PasteMethod) -> bool
     auto_submit && paste_method != PasteMethod::None
 }
 
+/// Delete `count` characters before the cursor by sending Backspace key events.
+/// Used to erase the last streamed partial before the final transcription paste.
+pub fn delete_chars(count: usize, app_handle: &AppHandle) -> Result<(), String> {
+    if count == 0 {
+        return Ok(());
+    }
+    let settings = get_settings(app_handle);
+    if settings.paste_method == PasteMethod::None {
+        return Ok(());
+    }
+    let enigo_state = app_handle
+        .try_state::<EnigoState>()
+        .ok_or("Enigo state not initialized")?;
+    let mut enigo = enigo_state
+        .0
+        .lock()
+        .map_err(|e| format!("Failed to lock Enigo: {}", e))?;
+    for _ in 0..count {
+        let _ = enigo.key(Key::Backspace, Direction::Press);
+        let _ = enigo.key(Key::Backspace, Direction::Release);
+    }
+    Ok(())
+}
+
+/// Paste `text` into the active application, first deleting `prev_char_count`
+/// characters before the cursor (to replace the previous streaming partial).
+/// No trailing space, no auto-submit — only the raw text insertion.
+pub fn paste_partial(
+    text: &str,
+    prev_char_count: usize,
+    app_handle: &AppHandle,
+) -> Result<(), String> {
+    use enigo::{Direction, Key, Keyboard};
+
+    let settings = get_settings(app_handle);
+    let paste_method = settings.paste_method;
+
+    if paste_method == PasteMethod::None || text.is_empty() {
+        return Ok(());
+    }
+
+    let enigo_state = app_handle
+        .try_state::<EnigoState>()
+        .ok_or("Enigo state not initialized")?;
+    let mut enigo = enigo_state
+        .0
+        .lock()
+        .map_err(|e| format!("Failed to lock Enigo: {}", e))?;
+
+    // Delete the previous partial by pressing Backspace `prev_char_count` times.
+    for _ in 0..prev_char_count {
+        let _ = enigo.key(Key::Backspace, Direction::Press);
+        let _ = enigo.key(Key::Backspace, Direction::Release);
+    }
+
+    // Insert the new partial — same method as the normal paste, but no extras.
+    match paste_method {
+        PasteMethod::None => {}
+        PasteMethod::Direct => {
+            paste_direct(
+                &mut enigo,
+                text,
+                #[cfg(target_os = "linux")]
+                settings.typing_tool,
+            )?;
+        }
+        PasteMethod::CtrlV | PasteMethod::CtrlShiftV | PasteMethod::ShiftInsert => {
+            // For streaming partials, skip the clipboard-save/restore round-trip.
+            // Restoring is what causes "stuck clipboard" if the process is killed mid-paste.
+            // The final paste (which DOES restore) will overwrite this anyway.
+            let clipboard = app_handle.clipboard();
+
+            #[cfg(target_os = "linux")]
+            let write_result = if is_wayland() && is_wl_copy_available() {
+                write_clipboard_via_wl_copy(text)
+            } else {
+                clipboard
+                    .write_text(text)
+                    .map_err(|e| format!("Failed to write to clipboard: {}", e))
+            };
+
+            #[cfg(not(target_os = "linux"))]
+            let write_result = clipboard
+                .write_text(text)
+                .map_err(|e| format!("Failed to write to clipboard: {}", e));
+
+            write_result?;
+            std::thread::sleep(Duration::from_millis(settings.paste_delay_ms));
+
+            #[cfg(target_os = "linux")]
+            let handled = try_send_key_combo_linux(&paste_method)?;
+            #[cfg(not(target_os = "linux"))]
+            let handled = false;
+
+            if !handled {
+                match paste_method {
+                    PasteMethod::CtrlV => input::send_paste_ctrl_v(&mut enigo)?,
+                    PasteMethod::CtrlShiftV => input::send_paste_ctrl_shift_v(&mut enigo)?,
+                    PasteMethod::ShiftInsert => input::send_paste_shift_insert(&mut enigo)?,
+                    _ => {}
+                }
+            }
+            // No clipboard restore — avoids stuck-clipboard if process dies here.
+        }
+        PasteMethod::ExternalScript => {
+            if let Some(path) = settings
+                .external_script_path
+                .as_ref()
+                .filter(|p| !p.is_empty())
+            {
+                paste_via_external_script(text, path)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
 pub fn paste(text: String, app_handle: AppHandle) -> Result<(), String> {
     let settings = get_settings(&app_handle);
     let paste_method = settings.paste_method;

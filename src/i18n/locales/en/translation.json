@@ -155,6 +155,14 @@
     }
   },
   "settings": {
+    "audioFile": {
+      "title": "Transcribe Audio File",
+      "description": "Select a WAV file to transcribe and paste into the active application.",
+      "button": "Choose audio file...",
+      "transcribing": "Transcribing...",
+      "success": "Transcribed and pasted",
+      "error": "Error: {{message}}"
+    },
     "modelSettings": {
       "title": "{{model}} Settings"
     },

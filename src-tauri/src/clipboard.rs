@@ -830,12 +830,15 @@ pub fn paste_partial(
     match paste_method {
         PasteMethod::None => {}
         PasteMethod::Direct => {
+            // Release the enigo lock before paste_direct acquires it via with_enigo.
+            drop(enigo);
             paste_direct(
-                &mut enigo,
                 text,
+                app_handle,
                 #[cfg(target_os = "linux")]
                 settings.typing_tool,
             )?;
+            return Ok(());
         }
         PasteMethod::CtrlV | PasteMethod::CtrlShiftV | PasteMethod::ShiftInsert => {
             // For streaming partials, skip the clipboard-save/restore round-trip.
@@ -867,9 +870,9 @@ pub fn paste_partial(
 
             if !handled {
                 match paste_method {
-                    PasteMethod::CtrlV => input::send_paste_ctrl_v(&mut enigo)?,
-                    PasteMethod::CtrlShiftV => input::send_paste_ctrl_shift_v(&mut enigo)?,
-                    PasteMethod::ShiftInsert => input::send_paste_shift_insert(&mut enigo)?,
+                    PasteMethod::CtrlV => input::send_paste_ctrl_v(&mut enigo, 0)?,
+                    PasteMethod::CtrlShiftV => input::send_paste_ctrl_shift_v(&mut enigo, 0)?,
+                    PasteMethod::ShiftInsert => input::send_paste_shift_insert(&mut enigo, 0)?,
                     _ => {}
                 }
             }

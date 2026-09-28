@@ -10,6 +10,7 @@ type PostProcessProviderState = {
   selectedProvider: PostProcessProvider | undefined;
   isCustomProvider: boolean;
   isAppleProvider: boolean;
+  isOllamaProvider: boolean;
   appleIntelligenceUnavailable: boolean;
   baseUrl: string;
   handleBaseUrlChange: (value: string) => void;
@@ -29,6 +30,8 @@ type PostProcessProviderState = {
 };
 
 const APPLE_PROVIDER_ID = "apple_intelligence";
+const OLLAMA_PROVIDER_ID = "ollama";
+const OLLAMA_HEADLESS_PROVIDER_ID = "ollama_headless";
 
 export const usePostProcessProviderState = (): PostProcessProviderState => {
   const {
@@ -57,6 +60,9 @@ export const usePostProcessProviderState = (): PostProcessProviderState => {
   }, [providers, selectedProviderId]);
 
   const isAppleProvider = selectedProvider?.id === APPLE_PROVIDER_ID;
+  const isOllamaProvider =
+    selectedProvider?.id === OLLAMA_PROVIDER_ID ||
+    selectedProvider?.id === OLLAMA_HEADLESS_PROVIDER_ID;
   const [appleIntelligenceUnavailable, setAppleIntelligenceUnavailable] =
     useState(false);
 
@@ -102,7 +108,11 @@ export const usePostProcessProviderState = (): PostProcessProviderState => {
         const hasBaseUrl = (provider?.base_url ?? "").trim() !== "";
         const hasApiKey = apiKey.trim() !== "";
 
-        if (provider?.id === "custom" ? hasBaseUrl : hasApiKey) {
+        const noApiKeyNeeded =
+          provider?.id === "custom" ||
+          provider?.id === OLLAMA_PROVIDER_ID ||
+          provider?.id === OLLAMA_HEADLESS_PROVIDER_ID;
+        if (noApiKeyNeeded ? hasBaseUrl : hasApiKey) {
           void fetchPostProcessModels(providerId);
         }
       }
@@ -118,7 +128,7 @@ export const usePostProcessProviderState = (): PostProcessProviderState => {
 
   const handleBaseUrlChange = useCallback(
     (value: string) => {
-      if (!selectedProvider || selectedProvider.id !== "custom") {
+      if (!selectedProvider || !selectedProvider.allow_base_url_edit) {
         return;
       }
       const trimmed = value.trim();
@@ -205,7 +215,10 @@ export const usePostProcessProviderState = (): PostProcessProviderState => {
     `post_process_models_fetch:${selectedProviderId}`,
   );
 
-  const isCustomProvider = selectedProvider?.id === "custom";
+  const isCustomProvider =
+    selectedProvider?.id === "custom" ||
+    selectedProvider?.id === OLLAMA_PROVIDER_ID ||
+    selectedProvider?.id === OLLAMA_HEADLESS_PROVIDER_ID;
 
   // No automatic fetching - user must click refresh button
 
@@ -215,6 +228,7 @@ export const usePostProcessProviderState = (): PostProcessProviderState => {
     selectedProvider,
     isCustomProvider,
     isAppleProvider,
+    isOllamaProvider,
     appleIntelligenceUnavailable,
     baseUrl,
     handleBaseUrlChange,

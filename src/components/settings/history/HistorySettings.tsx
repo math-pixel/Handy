@@ -15,6 +15,7 @@ import { formatDateTime } from "@/utils/dateFormat";
 import { AudioPlayer, AudioPlayerGroup } from "../../ui/AudioPlayer";
 import { Button } from "../../ui/Button";
 import { copyToClipboard } from "./clipboard";
+import { ModelPickerDropdown } from "./ModelPickerDropdown";
 
 const IconButton: React.FC<{
   onClick: () => void;
@@ -216,6 +217,17 @@ export const HistorySettings: React.FC = () => {
     }
   };
 
+  const retranscribeEntryWithModel = async (
+    id: number,
+    modelId: string,
+    _modelName: string,
+  ) => {
+    const result = await commands.retranscribeWithModel(id, modelId);
+    if (result.status !== "ok") {
+      throw new Error(String(result.error));
+    }
+  };
+
   const openRecordingsFolder = async () => {
     try {
       const result = await commands.openRecordingsFolder();
@@ -255,6 +267,7 @@ export const HistorySettings: React.FC = () => {
                 getAudioUrl={getAudioUrl}
                 deleteAudio={deleteAudioEntry}
                 retryTranscription={retryHistoryEntry}
+                retranscribeWithModel={retranscribeEntryWithModel}
               />
             ))}
           </div>
@@ -294,6 +307,7 @@ interface HistoryEntryProps {
   getAudioUrl: (fileName: string) => Promise<string | null>;
   deleteAudio: (id: number) => Promise<void>;
   retryTranscription: (id: number) => Promise<void>;
+  retranscribeWithModel: (id: number, modelId: string, modelName: string) => Promise<void>;
 }
 
 const HistoryEntryComponent: React.FC<HistoryEntryProps> = ({
@@ -303,10 +317,12 @@ const HistoryEntryComponent: React.FC<HistoryEntryProps> = ({
   getAudioUrl,
   deleteAudio,
   retryTranscription,
+  retranscribeWithModel,
 }) => {
   const { t, i18n } = useTranslation();
   const [showCopied, setShowCopied] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  const [retryingModelName, setRetryingModelName] = useState<string | null>(null);
 
   const hasTranscription = entry.transcription_text.trim().length > 0;
 
@@ -342,12 +358,28 @@ const HistoryEntryComponent: React.FC<HistoryEntryProps> = ({
   const handleRetranscribe = async () => {
     try {
       setRetrying(true);
+      setRetryingModelName(null);
       await retryTranscription(entry.id);
     } catch (error) {
       console.error("Failed to re-transcribe:", error);
       toast.error(t("settings.history.retranscribeError"));
     } finally {
       setRetrying(false);
+      setRetryingModelName(null);
+    }
+  };
+
+  const handleRetranscribeWithModel = async (modelId: string, modelName: string) => {
+    try {
+      setRetrying(true);
+      setRetryingModelName(modelName);
+      await retranscribeWithModel(entry.id, modelId, modelName);
+    } catch (error) {
+      console.error("Failed to re-transcribe with model:", error);
+      toast.error(t("settings.history.retranscribeError"));
+    } finally {
+      setRetrying(false);
+      setRetryingModelName(null);
     }
   };
 
@@ -400,6 +432,10 @@ const HistoryEntryComponent: React.FC<HistoryEntryProps> = ({
               }
             />
           </IconButton>
+          <ModelPickerDropdown
+            disabled={retrying}
+            onSelect={handleRetranscribeWithModel}
+          />
           <IconButton
             onClick={handleDeleteEntry}
             disabled={retrying}
@@ -433,7 +469,9 @@ const HistoryEntryComponent: React.FC<HistoryEntryProps> = ({
           `}</style>
         )}
         {retrying
-          ? t("settings.history.transcribing")
+          ? retryingModelName
+            ? t("settings.history.retranscribingWith", { model: retryingModelName })
+            : t("settings.history.transcribing")
           : hasTranscription
             ? entry.transcription_text
             : t("settings.history.transcriptionFailed")}

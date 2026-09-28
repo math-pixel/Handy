@@ -180,6 +180,14 @@ async fn post_process_transcription(settings: &AppSettings, transcription: &str)
         provider.id, model
     );
 
+    // Auto-start Ollama server if using the headless provider
+    if provider.id == "ollama_headless" {
+        if let Err(e) = crate::ollama_headless::ensure_server_running() {
+            error!("Ollama headless: {}", e);
+            return None;
+        }
+    }
+
     let api_key = settings
         .post_process_api_keys
         .get(&provider.id)

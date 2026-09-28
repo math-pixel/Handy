@@ -1,16 +1,27 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { Button } from "../ui/Button";
 import { SettingContainer } from "../ui/SettingContainer";
+import { useTranscriptionImportStore } from "@/stores/transcriptionImportStore";
 
 type Status = "idle" | "transcribing" | "success" | "error";
 
 export const AudioFileTranscribe: React.FC = () => {
   const { t } = useTranslation();
-  const [status, setStatus] = useState<Status>("idle");
+  const { isImporting, setImporting } = useTranscriptionImportStore();
+  const [status, setStatus] = useState<Status>(() =>
+    useTranscriptionImportStore.getState().isImporting ? "transcribing" : "idle",
+  );
   const [errorMsg, setErrorMsg] = useState("");
+
+  // Sync local status when global import state changes (e.g. after remount)
+  useEffect(() => {
+    if (isImporting && status === "idle") {
+      setStatus("transcribing");
+    }
+  }, [isImporting, status]);
 
   const handleClick = async () => {
     const selected = await open({
@@ -27,14 +38,17 @@ export const AudioFileTranscribe: React.FC = () => {
 
     const filePath = selected;
 
+    setImporting(true);
     setStatus("transcribing");
     setErrorMsg("");
 
     try {
       await invoke<string>("transcribe_audio_file", { filePath });
+      setImporting(false);
       setStatus("success");
       setTimeout(() => setStatus("idle"), 3000);
     } catch (e) {
+      setImporting(false);
       setErrorMsg(String(e));
       setStatus("error");
       setTimeout(() => setStatus("idle"), 5000);

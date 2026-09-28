@@ -1216,6 +1216,11 @@ pub async fn fetch_post_process_models(
         }
     }
 
+    // Ollama Headless: list models via CLI, no API key or HTTP server needed
+    if provider.id == "ollama_headless" {
+        return crate::ollama_headless::list_models();
+    }
+
     // Get API key
     let api_key = settings
         .post_process_api_keys
@@ -1224,7 +1229,11 @@ pub async fn fetch_post_process_models(
         .unwrap_or_default();
 
     // Skip fetching if no API key for providers that typically need one
-    if api_key.trim().is_empty() && provider.id != "custom" {
+    // "ollama" (local) and "custom" don't require an API key
+    if api_key.trim().is_empty()
+        && provider.id != "custom"
+        && provider.id != "ollama"
+    {
         return Err(format!(
             "API key is required for {}. Please add an API key to list available models.",
             provider.label

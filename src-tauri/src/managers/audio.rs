@@ -370,6 +370,30 @@ impl RecordingReadiness {
     }
 }
 
+/// Generation counter used to abort in-flight partial-paste closures on cancel.
+#[derive(Clone)]
+pub struct PartialPasteState {
+    generation: Arc<AtomicU64>,
+}
+
+impl PartialPasteState {
+    pub fn new() -> Self {
+        Self {
+            generation: Arc::new(AtomicU64::new(0)),
+        }
+    }
+
+    /// Advance the generation and return the new value.
+    /// Any closure that captured an older generation should self-abort.
+    pub fn advance_and_read(&self) -> u64 {
+        self.generation.fetch_add(1, Ordering::AcqRel) + 1
+    }
+
+    pub fn current(&self) -> u64 {
+        self.generation.load(Ordering::Acquire)
+    }
+}
+
 #[derive(Clone)]
 pub struct AudioRecordingManager {
     /// Never assign through this directly — route every write through
@@ -402,6 +426,8 @@ pub struct AudioRecordingManager {
     /// so the retry re-enumerates. The system-default case is never cached —
     /// the recorder resolves the current default itself, cheaply.
     cached_device: Arc<Mutex<Option<(String, cpal::Device)>>>,
+    /// Generation counter to abort in-flight partial-paste closures on cancel.
+    pub partial_paste_state: PartialPasteState,
 }
 
 impl AudioRecordingManager {
@@ -433,6 +459,7 @@ impl AudioRecordingManager {
             recording_active: Arc::new(AtomicBool::new(false)),
             capture_generation: Arc::new(AtomicU64::new(0)),
             cached_device: Arc::new(Mutex::new(None)),
+            partial_paste_state: PartialPasteState::new(),
         };
 
         // Always-on?  Open immediately.
@@ -971,6 +998,12 @@ impl AudioRecordingManager {
     pub fn is_recording_readiness_current(&self, generation: u64) -> bool {
         self.capture_generation.load(Ordering::Acquire) == generation
     }
+
+    /// No-op stub: disconnects the streaming chunk callback if one is active.
+    pub fn clear_chunk_callback(&self) {}
+
+    /// No-op stub: signals the streaming transcriber to stop if one is running.
+    pub fn invoke_streaming_stop(&self) {}
 
     pub fn cancel_generation(&self) -> u64 {
         self.cancel_generation.load(Ordering::Acquire)

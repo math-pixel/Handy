@@ -474,9 +474,13 @@
       "delete": "Delete entry",
       "deleteError": "Failed to delete entry. Please try again.",
       "retranscribe": "Re-transcribe",
+      "retranscribeWithModel": "Re-transcribe with model",
       "retranscribeError": "Failed to re-transcribe. Please try again.",
       "transcribing": "Transcribing...",
-      "transcriptionFailed": "Transcription failed. You can re-transcribe using the retry icon."
+      "transcriptionFailed": "Transcription failed. You can re-transcribe using the retry icon.",
+      "selectModel": "Select model",
+      "noDownloadedModels": "No other downloaded models",
+      "retranscribingWith": "Re-transcribing with {{model}}..."
     },
     "debug": {
       "title": "Debug",

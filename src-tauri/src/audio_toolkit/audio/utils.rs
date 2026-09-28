@@ -38,9 +38,10 @@ pub fn save_wav_file<P: AsRef<Path>>(file_path: P, samples: &[f32]) -> Result<()
 
     let mut writer = WavWriter::create(file_path.as_ref(), spec)?;
 
-    // Convert f32 samples to i16 for WAV
+    // Convert f32 samples to i16 for WAV. Clamp first: the resampler can
+    // produce values slightly outside [-1, 1], which would wrap on `as i16`.
     for sample in samples {
-        let sample_i16 = (sample * i16::MAX as f32) as i16;
+        let sample_i16 = (sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
         writer.write_sample(sample_i16)?;
     }
 
